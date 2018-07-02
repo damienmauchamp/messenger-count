@@ -21,10 +21,10 @@ $res = $submitted ? decodeJson($_FILES["file"]["tmp_name"]) : null;
 </head>
 <body>
 
-<? $res ? var_dump($res) : null ?>
 <form id="form" method="post" action="." enctype="multipart/form-data">
     <input type="file" id="file" name="file" accept=".json"/>
     <input type="submit" id="submit" name="submit" value="GO">
 </form>
+<? $res ? display($res) : null ?>
 </body>
 </html>
