@@ -21,6 +21,7 @@ function decodeJson($file)
  */
 function display($result)
 {
+    $total = 0;
     ?>
     <table>
         <tr>
@@ -29,8 +30,10 @@ function display($result)
         </tr>
         <?
         foreach ($result as $user => $n) {
+            $total += $n;
             echo "<tr><td class=\"user\">$user</td> <td class=\"messages\">$n</td></tr>";
         }
+        echo "<tr class=\"total\" style=\"font-weight:bold;\"><td class=\"user\">TOTAL</td> <td class=\"messages\">$total</td></tr>";
         ?>
     </table>
     <?
