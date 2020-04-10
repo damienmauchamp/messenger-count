@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf8"/>
+	<script type="text/javascript" src="https://code.jquery.com/jquery-1.12.1.js"></script>
+	<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.19/css/jquery.dataTables.css">
+	<script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.10.19/js/jquery.dataTables.js"></script>
+	<script>
+		var obj;
+		var users = [];
+		var group_info = {};
+		var emoji_reactions = [];
+	</script>
+	<style>
+		body {
+			font-family: Arial, Helvetica, sans-serif;
+			font-size: 12px;	 
+		}
+		.total, .group_info {
+			font-size: 16px;
+		}
+		.total_number {
+			font-weight: bold;
+		}
+		b.exclu {
+			text-decoration: line-through;
+			color: #5A5A5A;
+		}
+		#results tr td:not(:first-child) {
+			text-align: right;
+		}
+	</style>
+</head>
+<body>
+
+	<input id="file" type="file" />
+
+	<button id="tout">tout</button>
+	<button id="participants">participants</button>
+	<button id="messages">messages</button>
+
+	<input type="date" id="start" value="" onchange="onReaderLoad(null, true);"/>
+	<input type="date" id="end" value="" onchange="onReaderLoad(null, true);"/>
+
+	<table id="results" class="display" style="display: none">
+		<thead>
+			<tr id="results_entete">
+				<th></th>
+				<th>Nombre de messages</th>
+				<th>Reacts obtenues</th>
+				<!-- <th>% Reacts/message</th> -->
+			</tr>
+		</thead>
+		<tbody>
+		</tbody>
+	</table>
+
+	<br/>
+	<br/>
+	<div class="group_info">Date du premier message : <span class="" id="first_message_date"></span></div>
+	<div class="group_info">Date du dernier message : <span class="" id="last_message_date"></span></div>
+	<br/>
+	<div class="group_info">Date de création : <span class="" id="group_creation_date"></span></div>
+	<br/>
+
+	<div class="total">Total messages : <span class="total_number" id="total_number">0</span></div>
+	<div class="total">Total réactions : <span class="total_number" id="total_reactions_number">0</span></div>
+
+	<script>
+		var timestamp_now = +new Date();
+		var timestamp_start = $('#start').val() ? +new Date($('#start').val()) : 0;
+		var timestamp_end = $('#end').val() ? +new Date($('#end').val()) : timestamp_now;
+		var datatable;
+
+		function onChange(event) {
+			var reader = new FileReader();
+			reader.onload = onReaderLoad;
+			reader.readAsText(event.target.files[0]);
+		}
+
+		function onReaderLoad(event, triggered) {
+			if (triggered) {
+				// $.each(obj.participants, function(key, item) {
+				Object.keys(obj.participants).forEach((name) => {
+					obj.participants[name].n = 0;
+					obj.participants[name].actif = null;
+				});
+
+				// $.each(users, function(nom, item) {
+				Object.keys(users).forEach((name) => {
+					users[name].n = 0;
+					users[name].reactions = [];
+					users[name].reacts = [];
+					users[name].reactions_total = 0;
+				});
+
+			} else {
+				obj = JSON.parse(event.target.result);
+			}
+
+			timestamp_start = $('#start').val() ? +new Date($('#start').val()) : 0;
+			timestamp_end = $('#end').val() ? +new Date($('#end').val()) : timestamp_now;
+
+			$('#start').val(
+				$('#start').val(new Date(timestamp_start).getFullYear() + '-' + ("0" + (new Date(timestamp_start).getMonth()+1)).slice(-2) + '-' + ("0" + new Date(timestamp_start).getDate()).slice(-2))
+			);
+			$('#end').val(
+				$('#end').val(new Date(timestamp_end).getFullYear() + '-' + ("0" + (new Date(timestamp_end).getMonth()+1)).slice(-2) + '-' + ("0" + new Date(timestamp_end).getDate()).slice(-2))
+			);
+
+			group_info = {};
+			// loop on messages
+			for (var i = 0 ; i < obj.messages.length ; i++) {
+
+				// latest message
+				if (i === 0) {
+					group_info.last_message = obj.messages[i];
+				}
+				// first message
+				if (i === (obj.messages.length - 1)) {
+					group_info.creation_message = obj.messages[i];
+				}
+				// first message
+				if (i === (obj.messages.length - 2)) {
+					group_info.first_message = obj.messages[i];
+				}
+
+				if ((timestamp_start && obj.messages[i].timestamp_ms < timestamp_start) || (timestamp_end && obj.messages[i].timestamp_ms > timestamp_end)) {
+					continue;
+				}
+
+				// user init
+				if (typeof users[obj.messages[i].sender_name] === "undefined") {
+					var reactions = [];
+					var reacts = [];
+					var total_reacts = 0; 
+
+					// if message has reactions
+					if (obj.messages[i].hasOwnProperty("reactions")) {		
+
+						// loop on reactions
+						for (var r = 0 ; r < obj.messages[i].reactions.length ; r++) {
+							var actor = obj.messages[i].reactions[r].actor;
+							var react = decodeFBEmoji(obj.messages[i].reactions[r].reaction); // decodeFBEmoji()
+							reactions[actor] = 1;
+							reacts[react] = 1;
+							total_reacts++;
+						}
+					}
+
+					// pushing the user
+					users[obj.messages[i].sender_name] = {
+						"n": 1, // forst message
+						"reactions": reactions, // + type/user
+						"reacts": reacts,
+						"reactions_total": total_reacts
+					};
+					reactions = [];
+				}
+				else { // user already initialized
+					users[obj.messages[i].sender_name].n = Number.parseInt(users[obj.messages[i].sender_name].n) + 1;
+
+					// if message has reactions
+					if (obj.messages[i].hasOwnProperty("reactions")) {		 
+
+						// loop on reactions				 
+						for (var r = 0 ; r < obj.messages[i].reactions.length ; r++) {
+							var sender = obj.messages[i].sender_name;
+							var actor = obj.messages[i].reactions[r].actor;
+							var react = decodeFBEmoji(obj.messages[i].reactions[r].reaction); // decodeFBEmoji()
+
+							if (users[sender].reactions.hasOwnProperty(actor)) {
+								users[sender].reactions[actor] = users[sender].reactions[actor] + 1;
+							} else {
+								users[sender].reactions[actor] = 1;
+							}
+
+							if (users[sender].reacts.hasOwnProperty(react)) {
+								users[sender].reacts[react] = users[sender].reacts[react] + 1;
+							} else {
+								users[sender].reacts[react] = 1;
+							}
+
+							users[sender].reactions_total = users[sender].reactions_total + 1;
+						}
+					}
+				}
+				//if (i==50) break;
+			}
+			console.log("done");
+
+			displayUsers(users);
+		}
+
+		document.getElementById('file').addEventListener('change', onChange);
+
+		function displayUsers(users) {
+
+			// console.log(obj.participants);
+
+			$.each(obj.participants, function(key, item) {
+				obj.participants[key].n = users[item.name] ? users[item.name].n : 0;
+				obj.participants[key].actif = true;
+			});
+
+			var ajouter_exclus = true;
+			if (ajouter_exclus) {
+
+				Object.keys(users).forEach((name) => {
+					if (!obj.participants.find(p => p.name === name)) {
+						obj.participants.push({
+							name: name,
+							n: users[name].n,
+							actif: false
+						});
+					}
+
+					Object.keys(users[name].reacts).forEach((react) => {
+						console.log(name, users[name].reacts[react]);
+						if (users[name].reacts[react]) {
+							if (emoji_reactions.hasOwnProperty(react)) {
+								emoji_reactions[react] += users[name].reacts[react];
+							} else {
+								emoji_reactions[react] = users[name].reacts[react];
+							}
+						}
+					});
+				});
+				// Object.keys(users).forEach((name) => {
+				//	 if (!obj.participants.find(p => p.name = name)) {
+				//		 console.log(users);
+				//	 }
+				// });
+			}
+
+			// ajouts des reacts dans l'entête
+			// $('#results tbody tr').remove();
+			$('#results_entete th.react_emoji').remove();
+			Object.keys(emoji_reactions).forEach(r => {
+				$('#results_entete').append('<th class="react_emoji">' + r + '</td>')
+			});
+
+			var table = $('#results');
+
+			if ($.fn.dataTable.isDataTable('#results')) {
+			    datatable = table.DataTable();
+			}
+			else {
+				datatable = table.DataTable({
+					"pageLength": 50,
+					"order": [[1, "desc"], [2, "desc"]]
+				});	
+			}
+			datatable.clear();
+			var tbody = table.find("tbody");
+
+			var total_messages = 0;
+			var total_reactions = 0;
+
+			console.log(obj.participants);
+
+			obj.participants.sort(compareValues('n', 'desc'));
+
+			console.log(obj.participants);
+
+			$.each(obj.participants, function(key, item) {
+				var user = users[item.name];
+				total_messages += (user ? user.n : 0);
+				total_reactions += (user ? user.reactions_total : 0);
+				// console.log(item.name);
+				//tbody.append('<tr id="user-' + key + '"><td class="name-cell">' + decodeURIComponent(escape(item.name)) + '</td><td class="n-cell">' + user.n + '</td><td class="reacts-cell">' + user.reactions_total + '</td></tr>')
+				var class_actif = item.actif ? 'actif' : 'exclu';
+
+				var donnees_users = [
+					decodeURIComponent(escape('<b class="' + class_actif + '">' + item.name + '</b>')),
+					(user ? user.n : 0),
+					(user ? user.reactions_total : 0),
+					// (user.reactions_total/user.n).toFixed(2)
+				];
+
+				Object.keys(emoji_reactions).forEach(r => {
+					donnees_users.push(user && user.reacts.hasOwnProperty(r) ? user.reacts[r] : 0);
+				});
+
+				console.log(donnees_users);
+
+				datatable.row.add(donnees_users).draw(false);
+				// console.log(item.name, users[item.name]);
+			});
+			table.show();
+			$("#total_number").text(total_messages);
+			$("#total_reactions_number").text(total_reactions);
+
+			group_info.creation_message ? $("#group_creation_date").text(timestampToDate(group_info.creation_message.timestamp_ms)) : $("#group_creation_date").text('?');
+			group_info.first_message || timestamp_start
+				? $("#first_message_date").text(timestampToDate(timestamp_start ? timestamp_start : group_info.first_message))
+				: $("#first_message_date").hide();
+			
+			group_info.last_message || timestamp_end
+				? $("#last_message_date").text(timestampToDate(timestamp_end ? timestamp_end : group_info.last_message))
+					: $("#last_message_date").hide();
+		}
+
+		function timestampToDate(timestamp) {
+			return new Date(timestamp).toLocaleDateString('fr-FR', {
+				weekday: 'short',
+				year: 'numeric',
+				month: 'long',
+				day: 'numeric',
+				hour: 'numeric',
+				minute: 'numeric',
+				second: 'numeric'
+			});
+		}
+
+
+		function getParticipants() {
+			if (!obj || !obj.participants)
+				return false;
+			console.log(obj.participants);
+		}
+
+		function countMessages(messages) {
+			var total = messages.length;
+			/*for (var i = 0 ; i < total ; i++) {
+				console.log(messages[i].sender_name);
+			}*/
+			console.log(obj);
+		}
+
+		function compareValues(key, order = 'asc') {
+			return function innerSort(a, b) {
+				if (!a.hasOwnProperty(key) || !b.hasOwnProperty(key)) {
+					// property doesn't exist on either object
+					return 0;
+				}
+
+				const varA = (typeof a[key] === 'string')
+				? a[key].toUpperCase() : a[key];
+				const varB = (typeof b[key] === 'string')
+				? b[key].toUpperCase() : b[key];
+
+				let comparison = 0;
+				if (varA > varB) {
+					comparison = 1;
+				} else if (varA < varB) {
+					comparison = -1;
+				}
+				return (
+					(order === 'desc') ? (comparison * -1) : comparison
+					);
+			};
+		}
+
+		function decodeFBEmoji(fbString) {
+			// Convert String to Array of hex codes
+			const codeArray = fbString.split('').map(char => (
+					char.charCodeAt(0)
+				)
+			);	// result is [0xf0, 0x9f, 0x98, 0xa2]
+
+			// Convert plain JavaScript array to Uint8Array
+			const byteArray = Uint8Array.from(codeArray);
+
+			// Decode byte array as a UTF-8 string
+			return new TextDecoder('utf-8').decode(byteArray);	// '😢'
+		}
+
+		$("#tout").on('click', function() {
+			console.log(obj);
+		});
+
+		$("#participants").on('click', function() {
+			if (!obj || !obj.participants)
+				return false;
+			console.log(obj.participants);
+		});
+
+		$(document).ready( function () {
+			//$('#results').DataTable();
+		} );
+	</script>
+</body>
+</html>

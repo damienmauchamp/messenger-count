@@ -1,0 +1,6 @@
+.idea
+.old
+*.json
+*.psd
+*.ini
+test*
