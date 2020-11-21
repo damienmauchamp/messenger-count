@@ -1,12 +1,14 @@
 <?php
 
+ini_set('memory_limit', -1);
+
 /**
  * Only execute if your .json file is divided in multiple parts.
  * This will merge them all in one file
  */
 
 $files = [];
-foreach(glob('message_*.json') as $file) {
+foreach(glob('messages/message_*.json') as $file) {
 	if (preg_match('/.*_(\d)\.json$/', $file)) {
 		$file = preg_replace('/(.*)_(\d)(\.json)$/', '$1_0$2$3', $file);
 	}
@@ -42,6 +44,6 @@ foreach ($files as $i => $file) {
 }
 $data['messages'] = $messages;
 
-file_put_contents(__DIR__ . '/message.json', json_encode($data));
+file_put_contents(__DIR__ . '/messages/message.json', json_encode($data));
 
 // print_r($files);

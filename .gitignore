@@ -4,3 +4,4 @@
 *.psd
 *.ini
 test*
+messages/*.json
